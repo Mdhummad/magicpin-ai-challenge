@@ -116,16 +116,15 @@ SCORING DIMENSIONS you must maximise (0-10 each, judge is strict):
    BAD: "Your performance has dipped."  GOOD: "Your calls dropped 18% this week vs peer median of 3.5% CTR."
 2. CATEGORY FIT — tone="{tone}". FORBIDDEN words: {taboos}. Match the vertical's communication style exactly.
 3. MERCHANT FIT — use THIS merchant's actual numbers. Name them. Reference their locality, plan, real stats.
-4. TRIGGER RELEVANCE — The trigger is the FIRST SENTENCE, not a footnote. WHY NOW must be unmistakable.
-5. ENGAGEMENT COMPULSION — {levers}
-   The message MUST feel like the merchant would lose something by not replying.
+4. TRIGGER RELEVANCE — The trigger is the FIRST SENTENCE, not a footnote. WHY NOW must be unmistakable. You MUST explicitly connect the message to the TRIGGER EVENT in the very first sentence. Use specific data from the trigger payload to justify this message!
+5. ENGAGEMENT COMPULSION — {levers}. You MUST create a powerful sense of loss aversion, urgency, or curiosity. Ensure the merchant feels they are losing money/customers or missing out right now if they don't reply. Make the ask irresistible.
 
 ENGAGEMENT RULES (critical for score — judge penalises vague CTAs heavily):
 - EFFORT EXTERNALIZATION: Vera has already done the work. Say it explicitly:
   "I've already drafted this for you." / "I've lined up the recall slots." / "Message is ready to send."
 - BINARY CTA: Never say "let me know" or "feel free to reach out".
   Say: "Reply YES and I'll send it in 60 seconds" or "Shall I go ahead? YES/NO"
-- OPEN WITH IMPACT: First sentence = the most compelling fact from the trigger. No warm-up phrases.
+- OPEN WITH IMPACT AND TRIGGER: First sentence = the most compelling fact from the trigger explaining WHY NOW. No warm-up phrases.
 - SOCIAL PROOF WITH NUMBERS: Don't say "peers" — say "top {category.get('slug','')} clinics average X% CTR".
 
 HARD RULES:
@@ -170,7 +169,30 @@ OUTPUT: ONLY a JSON object:
         signals    = merchant.get("signals", [])
         digest     = category.get("digest", [])
         trg_kind   = trigger.get("kind", "generic")
-        trg_payload= trigger.get("payload", {})
+        trg_payload= dict(trigger.get("payload", {}))
+
+        # ── Trigger-Kind Dispatch Table ───────────────────────────────────────
+        dispatch_instruction = ""
+        if trg_kind == "regulation_change":
+            dispatch_instruction = "ROUTING INSTRUCTION: regulation_change -> Compose a DCI compliance alert with the exact deadline, dose change, and a clear action item. DO NOT mention CTR, performance, or patient recall."
+        elif trg_kind == "perf_dip":
+            if "delta_pct" in trg_payload:
+                try:
+                    pct = int(abs(float(trg_payload["delta_pct"])) * 100)
+                    trg_payload["parsed_delta"] = f"{pct}% drop"
+                except:
+                    pass
+            dispatch_instruction = "ROUTING INSTRUCTION: perf_dip -> Compose a metric explainer focusing on the recent drop in performance. State the exact percentage drop (use 'parsed_delta' if available, NOT the raw decimal ratio) and compare against the peer median. Ask if they want you to fix it."
+        elif trg_kind == "ipl_match_today":
+            dispatch_instruction = "ROUTING INSTRUCTION: ipl_match_today -> Compose a time-bound alert for tonight's IPL match. Name the teams playing and suggest a last-minute broadcast to drive orders before the match starts. End with a binary YES/NO."
+        elif trg_kind == "recall_due":
+            dispatch_instruction = "ROUTING INSTRUCTION: recall_due -> Frame as effort externalization. Say you've drafted the recall message and ask for confirmation to send."
+        elif trg_kind == "competitor_opened":
+            dispatch_instruction = "ROUTING INSTRUCTION: competitor_opened -> Name the competitor and locality. Use curiosity and loss aversion. Ask if they want to see the competitor's listing."
+        elif trg_kind == "review_theme_emerged":
+            dispatch_instruction = "ROUTING INSTRUCTION: review_theme_emerged -> State the emerging review theme and exact count. Ask if they want a drafted response."
+        else:
+            dispatch_instruction = "ROUTING INSTRUCTION: Follow the standard lever hints."
 
         # resolve referenced digest item
         top_item_id = trg_payload.get("top_item_id") or trg_payload.get("digest_item_id")
@@ -201,6 +223,7 @@ kind: {trg_kind}  |  source: {trigger.get('source')}  |  urgency: {trigger.get('
 payload: {trg_payload_json}
 {digest_item_line}
 suppression_key: {trigger.get('suppression_key','')}
+{dispatch_instruction}
 
 === CATEGORY ===
 slug: {category.get('slug')}  |  tone: {category.get('voice',{}).get('tone')}

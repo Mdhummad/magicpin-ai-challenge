@@ -93,6 +93,8 @@ def detect_intent_commit(message: str) -> bool:
 def detect_hostile(message: str) -> bool:
     """True if merchant is expressing hostility or opting out."""
     msg_lower = _lower(message)
+    if "stop" in msg_lower:
+        return True
     for phrase in HOSTILE_PHRASES:
         if phrase in msg_lower:
             return True
