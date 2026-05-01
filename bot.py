@@ -30,6 +30,10 @@ from conversation_handlers import ConversationHandler
 app = FastAPI(title="Vera++", version="2.0.0")
 START_TIME = time.time()
 
+@app.get("/")
+async def root():
+    return {"service": "Vera++", "version": "2.0.0", "status": "ok"}
+
 # ── In-memory state ────────────────────────────────────────────────────────────
 # (scope, context_id)  →  {version, payload}
 contexts: dict[tuple[str, str], dict] = {}
