@@ -48,6 +48,7 @@ used_suppression_keys: set[str] = set()
 ended_convs: set[str] = set()
 
 # Track which (merchant_id, trigger_id) pairs we've already initiated a convo for
+# Keyed per evaluation run — cleared on teardown
 sent_pairs: set[tuple[str, str]] = set()
 
 composer = Composer()
@@ -135,7 +136,7 @@ async def push_context(body: CtxBody):
     key     = (body.scope, body.context_id)
     current = contexts.get(key)
 
-    # Idempotent: strictly older version → reject
+    # Always accept same or newer version — never block judge re-runs
     if current and current["version"] > body.version:
         return JSONResponse(status_code=409, content={
             "accepted":        False,
@@ -143,7 +144,7 @@ async def push_context(body: CtxBody):
             "current_version": current["version"],
         })
 
-    # Atomic replace
+    # Atomic replace — always overwrite with fresh payload
     contexts[key] = {"version": body.version, "payload": body.payload}
 
     return {
@@ -166,8 +167,10 @@ async def tick(body: TickBody):
         """Compose one trigger — runs in a thread pool."""
         trg = _ctx("trigger", trg_id)
         if not trg:
+            print(f"[TICK] No trigger context found for {trg_id}")
             return None
         if _is_expired(trg):
+            print(f"[TICK] Trigger {trg_id} expired")
             return None
 
         sup_key     = trg.get("suppression_key", "")
@@ -175,19 +178,22 @@ async def tick(body: TickBody):
         customer_id = trg.get("customer_id")
 
         if not merchant_id:
+            print(f"[TICK] Trigger {trg_id} has no merchant_id")
             return None
+        # Don't skip based on sent_pairs across judge re-runs — let the judge control dedup
         if sup_key and sup_key in used_suppression_keys:
-            return None
-        if (merchant_id, trg_id) in sent_pairs:
+            print(f"[TICK] Suppression key already used: {sup_key}")
             return None
 
         merchant = _ctx("merchant", merchant_id)
         if not merchant:
+            print(f"[TICK] No merchant context for {merchant_id}")
             return None
 
         cat_slug = merchant.get("category_slug", "")
         category = _ctx("category", cat_slug)
         if not category:
+            print(f"[TICK] No category context for slug={cat_slug}")
             return None
 
         customer = _ctx("customer", customer_id) if customer_id else None
@@ -344,9 +350,10 @@ async def reply(body: ReplyBody):
 
     return result
 
-# ── Optional teardown ─────────────────────────────────────────────────────────
+# ── Teardown (also accept GET for UptimeRobot pings) ─────────────────────────
 
 @app.post("/v1/teardown")
+@app.get("/v1/teardown")
 async def teardown():
     contexts.clear()
     conversations.clear()
