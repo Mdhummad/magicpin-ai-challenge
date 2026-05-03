@@ -135,8 +135,8 @@ async def push_context(body: CtxBody):
     key     = (body.scope, body.context_id)
     current = contexts.get(key)
 
-    # Idempotent: same or older version → reject
-    if current and current["version"] >= body.version:
+    # Idempotent: strictly older version → reject
+    if current and current["version"] > body.version:
         return JSONResponse(status_code=409, content={
             "accepted":        False,
             "reason":          "stale_version",
@@ -311,6 +311,9 @@ async def reply(body: ReplyBody):
     merchant    = _ctx("merchant", merchant_id) if merchant_id else None
     category    = _ctx("category", merchant.get("category_slug", "")) if merchant else None
 
+    customer_id = body.customer_id or conv.get("customer_id")
+    customer    = _ctx("customer", customer_id) if customer_id else None
+
     # Get handler response
     result = handler.handle_reply(
         conv_id=conv_id,
@@ -318,6 +321,8 @@ async def reply(body: ReplyBody):
         message=body.message,
         merchant=merchant,
         category=category,
+        customer=customer,
+        from_role=body.from_role,
         composer=composer,
     )
 

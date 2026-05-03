@@ -166,6 +166,8 @@ class ConversationHandler:
         message: str,
         merchant: Optional[dict],
         category: Optional[dict],
+        customer: Optional[dict],
+        from_role: str,
         composer,
     ) -> dict:
         """
@@ -182,6 +184,12 @@ class ConversationHandler:
         prev_vera   = [t["body"] for t in turns if t.get("from") == "vera"]
         prev_merchant = [t["body"] for t in turns if t.get("from") == "merchant"]
         auto_count  = conv_state.get("auto_reply_count", 0)
+
+        # ── 0. Customer Reply Routing ─────────────────────────────────────────
+        if from_role == "customer":
+            return self._llm_reply(
+                conv_state, merchant, category, customer, message, use_hindi, composer, from_role
+            )
 
         # ── 1. Hostile / opt-out ──────────────────────────────────────────────
         if detect_hostile(message):
@@ -220,7 +228,7 @@ class ConversationHandler:
                     "rationale": "Normal reply — generic follow-up (no context available)."}
 
         return self._llm_reply(
-            conv_state, merchant, category, message, use_hindi, composer
+            conv_state, merchant, category, customer, message, use_hindi, composer, from_role
         )
 
     # ── Intent commit mode ────────────────────────────────────────────────────
@@ -294,7 +302,7 @@ class ConversationHandler:
 
     # ── LLM continuation reply ────────────────────────────────────────────────
 
-    def _llm_reply(self, conv_state, merchant, category, merchant_msg, use_hindi, composer):
+    def _llm_reply(self, conv_state, merchant, category, customer, merchant_msg, use_hindi, composer, from_role):
         turns    = conv_state.get("turns", [])
         trigger  = {"kind": conv_state.get("trigger_id", ""), "payload": {}}
         try:
@@ -302,10 +310,10 @@ class ConversationHandler:
                 category=category,
                 merchant=merchant,
                 trigger=trigger,
-                customer=None,
+                customer=customer,
                 conversation_history=turns,
                 merchant_message=merchant_msg,
-                intent="engaged",
+                intent="customer_reply" if from_role == "customer" else "engaged",
             )
             if result and result.get("body"):
                 return {"action": "send", "body": result["body"],

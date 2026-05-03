@@ -150,11 +150,16 @@ OUTPUT: ONLY a JSON object, no markdown fences, no commentary:
             "engaged":   "Merchant accepted / is engaged. Move IMMEDIATELY to the next action step. Do NOT re-qualify.",
             "off_topic": "Merchant asked something outside your scope. Politely decline in 1 sentence, then redirect to the original topic.",
             "curveball": "Unexpected reply. Stay on-mission, address briefly, then redirect.",
+            "customer_reply": "Customer sent a message. Address the customer directly and handle their request (e.g. booking a slot) in a helpful, customer-facing tone.",
         }.get(intent, "Respond naturally and advance the conversation.")
 
-        return f"""You are Vera replying in an ongoing WhatsApp conversation with a merchant.
+        intro = "You are Vera replying in an ongoing WhatsApp conversation with a merchant."
+        if intent == "customer_reply":
+            intro = "You are replying directly to a CUSTOMER on behalf of the merchant."
+
+        return f"""{intro}
 Tone: {tone}. Forbidden words: {taboos}.
-Detected merchant intent: {intent_rule}
+Detected intent: {intent_rule}
 {lang_hint}
 OUTPUT: ONLY a JSON object:
 {{"body":"<reply>","cta":"open_ended"|"binary_yes_no"|"binary_confirm_cancel"|"none","rationale":"<1-2 sentences>"}}"""
